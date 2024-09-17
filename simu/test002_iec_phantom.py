@@ -5,23 +5,24 @@ import opengate as gate
 import opengate.contrib.phantoms.nemaiec as gate_iec
 import opengate.contrib.spect.siemens_intevo as intevo
 from scipy.spatial.transform import Rotation
-from digitizer_helpers import add_digitizer_intevo_lu177
+from spect_helpers import add_digitizer_intevo_lu177
 from pathlib import Path
 
 if __name__ == "__main__":
 
     # folders
-    output_folder = Path("output")
     simu_name = "test002"
 
     # create the simulation
     sim = gate.Simulation()
 
     # main options
-    # sim.visu = True  # uncomment to enable visualisation
+    # sim.visu = True # uncomment to enable visualisation
     sim.visu_type = "vrml"
     sim.random_seed = "auto"
     sim.number_of_threads = 4
+    sim.progress_bar = True
+    sim.output_dir = Path("./output")
 
     # units
     sec = gate.g4_units.s
@@ -41,7 +42,7 @@ if __name__ == "__main__":
 
     # spect head
     head, colli, crystal = intevo.add_spect_head(
-        sim, "spect", collimator_type="melp", debug=sim.visu
+        sim, "spect", collimator_type="melp", debug=(sim.visu and sim.visu_type != "qt")
     )
     head.translation = [0, 0, 250 * mm]
     # (fake rotation to be in front of the phantom)
@@ -57,7 +58,7 @@ if __name__ == "__main__":
     sim.physics_manager.set_production_cut(crystal.name, "all", 2 * mm)
 
     # add sources for all spheres
-    a = 1e3 * BqmL / sim.number_of_threads
+    a = 1e4 * BqmL / sim.number_of_threads
     activity_Bq_mL = [a] * 6
     sources = gate_iec.add_spheres_sources(
         sim, phantom.name, "sources", "all", activity_Bq_mL, verbose=True
@@ -70,15 +71,15 @@ if __name__ == "__main__":
 
     # digitizer : probably not correct
     proj = add_digitizer_intevo_lu177(sim, head.name, crystal.name)
-    proj.output = output_folder / f"{simu_name}_projection.mhd"
+    proj.output_filename = f"{simu_name}_projection.mhd"
     print(f'Projection size: {proj.size}')
     print(f'Projection spacing: {proj.spacing} mm')
-    print(f'Projection output: {proj.output}')
+    print(f'Projection output: {proj.get_output_path()}')
 
     # add stat actor
     stats = sim.add_actor("SimulationStatisticsActor", "stats")
     stats.track_types_flag = True
-    stats.output = output_folder / f"{simu_name}_stats.txt"
+    stats.output_filename = f"{simu_name}_stats.txt"
 
     # go
     time = 300 * sec
@@ -88,5 +89,4 @@ if __name__ == "__main__":
     sim.run()
 
     # print
-    stats = sim.output.get_actor("stats")
     print(stats)

@@ -47,3 +47,4 @@ if __name__ == "__main__":
     output_filename = output_folder / f"{simu_name}_3d_image.mhd"
     img_3d_itk = itk.GetImageFromArray(img_3d)
     itk.imwrite(img_3d_itk, output_filename)
+    print(f'Output image written to {output_filename}')

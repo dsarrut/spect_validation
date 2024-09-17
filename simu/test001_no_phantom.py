@@ -4,23 +4,24 @@
 import opengate as gate
 import opengate.contrib.spect.siemens_intevo as intevo
 from scipy.spatial.transform import Rotation
-from digitizer_helpers import add_digitizer_intevo_lu177
+from spect_helpers import add_digitizer_intevo_lu177
 from pathlib import Path
 
 if __name__ == "__main__":
 
     # folders
-    output_folder = Path("output")
     simu_name = "test001"
 
     # create the simulation
     sim = gate.Simulation()
 
     # main options
-    # sim.visu = True # uncomment to enable visualisation
-    sim.visu_type = "vrml"
+    #sim.visu = True # uncomment to enable visualisation
+    #sim.visu_type = "qt"
     sim.random_seed = "auto"
-    sim.number_of_threads = 4
+    sim.number_of_threads = 2
+    sim.progress_bar = True
+    sim.output_dir = Path("./output")
 
     # units
     sec = gate.g4_units.s
@@ -40,7 +41,7 @@ if __name__ == "__main__":
 
     # spect head
     head, colli, crystal = intevo.add_spect_head(
-        sim, "spect", collimator_type="melp", debug=sim.visu
+        sim, "spect", collimator_type="melp", debug=(sim.visu and sim.visu_type != "qt")
     )
     head.translation = [0, 0, -280 * mm]
     head.rotation = Rotation.from_euler("xy", (90, 90), degrees=True).as_matrix()
@@ -59,8 +60,9 @@ if __name__ == "__main__":
     source1.direction.type = "iso"
     source1.direction.acceptance_angle.volumes = [head.name]
     source1.direction.acceptance_angle.intersection_flag = True
+    #source1.direction.acceptance_angle.skip_policy = "ZeroEnergy"
     source1.energy.mono = 113 * keV
-    source1.activity = 1e4 * Bq
+    source1.activity = 1e4 * Bq / sim.number_of_threads
 
     # two simple sources
     source2 = sim.add_source("GenericSource", "source2")
@@ -71,20 +73,23 @@ if __name__ == "__main__":
     source2.direction.type = "iso"
     source2.direction.acceptance_angle.volumes = [head.name]
     source2.direction.acceptance_angle.intersection_flag = True
+    #source2.direction.acceptance_angle.skip_policy = "ZeroEnergy"
     source2.energy.mono = 208 * keV
-    source2.activity = 1e4 * Bq / sim. number_of_threads
+    source2.activity = 1e4 * Bq / sim.number_of_threads
 
     # digitizer : probably not correct
     proj = add_digitizer_intevo_lu177(sim, head.name, crystal.name)
-    proj.output = output_folder / f"{simu_name}_projection.mhd"
+    proj.output_filename = f"{simu_name}_projection.mhd"
     print(f'Projection size: {proj.size}')
     print(f'Projection spacing: {proj.spacing} mm')
-    print(f'Projection output: {proj.output}')
+    print(f'Projection output: {proj.get_output_path()}')
 
     # add stat actor
     stats = sim.add_actor("SimulationStatisticsActor", "stats")
+    stats.TOTO = "toto"
+    stats.mother = "toto"
     stats.track_types_flag = True
-    stats.output = output_folder / f"{simu_name}_stats.txt"
+    stats.output_filename = f"{simu_name}_stats.txt"
 
     # go
     time = 300 * sec
@@ -94,5 +99,4 @@ if __name__ == "__main__":
     sim.run()
 
     # print
-    stats = sim.output.get_actor("stats")
     print(stats)

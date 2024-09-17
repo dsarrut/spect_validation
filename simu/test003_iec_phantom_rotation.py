@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import opengate as gate
+from spect_helpers import *
 import opengate.contrib.phantoms.nemaiec as gate_iec
-import opengate.contrib.spect.siemens_intevo as intevo
 import opengate.contrib.spect.ge_discovery_nm670 as nm670
 from scipy.spatial.transform import Rotation
-from digitizer_helpers import add_digitizer_intevo_lu177
 from pathlib import Path
 
 if __name__ == "__main__":
 
     # folders
-    output_folder = Path("output")
     simu_name = "test003"
 
     # create the simulation
     sim = gate.Simulation()
 
     # main options
-    #sim.visu = True  # uncomment to enable visualisation
+    # sim.visu = True  # uncomment to enable visualisation
     sim.visu_type = "vrml"
     sim.random_seed = "auto"
-    sim.number_of_threads = 1
+    sim.number_of_threads = 8
+    sim.progress_bar = True
+    sim.output_dir = Path("./output")
+    if sim.visu:
+        sim.number_of_threads = 1
 
     # units
     sec = gate.g4_units.s
@@ -41,20 +42,10 @@ if __name__ == "__main__":
     world.material = "G4_AIR"
 
     # spect heads
-    heads = []
-    crystals = []
-    for i in range(2):
-        head, colli, crystal = intevo.add_spect_head(
-            sim, f"spect_{i}", collimator_type="melp", debug=sim.visu
-        )
-        heads.append(head)
-        crystals.append(crystal)
-    # this head translation is not used (only to avoid overlap warning at initialisation)
-    heads[0].translation = [40 * cm, 0, 0]
-    heads[1].translation = [-40 * cm, 0, 0]
+    heads, crystals = add_intevo_two_heads(sim, 'spect', "melp", 40 * cm)
 
     # phantom
-    phantom = gate_iec.add_iec_phantom(sim, name='phantom', fake_material=True)
+    phantom = gate_iec.add_iec_phantom(sim, name='phantom')
 
     # table
     table = nm670.add_fake_table(sim, "table")
@@ -77,62 +68,45 @@ if __name__ == "__main__":
         gate.sources.generic.set_source_rad_energy_spectrum(source, "lu177")
         source.particle = "gamma"
 
-    # digitizer : probably not correct
+    # digitizer : probably not correct (yet)
     for i in range(2):
         proj = add_digitizer_intevo_lu177(sim, heads[i].name, crystals[i].name)
-        proj.output = output_folder / f"{simu_name}_projection_{i}.mhd"
+        proj.output_filename = f"{simu_name}_projection_{i}.mhd"
         print(f'Projection size: {proj.size}')
         print(f'Projection spacing: {proj.spacing} mm')
-        print(f'Projection output: {proj.output}')
+        print(f'Projection output: {proj.get_output_path()}')
 
     # add stat actor
     stats = sim.add_actor("SimulationStatisticsActor", "stats")
     stats.track_types_flag = True
-    stats.output = output_folder / f"{simu_name}_stats.txt"
+    stats.output_filename = f"{simu_name}_stats.txt"
 
-    # compute the gantry rotations
+    # set the runs
+    n = 60
     total_time = 300 * sec
     if sim.visu:
         total_time = 0.001 * sec
-    n = 60
+    start_time = 0
     step_time = total_time / n
-    step_angle = 360 / len(heads) / n
+    end_time = step_time
     sim.run_timing_intervals = []
-    for i in range(2):
-        translations = []
-        rotations = []
-        initial_rot = Rotation.from_euler("X", 90, degrees=True)
-        if i == 1:
-            initial_rot = Rotation.from_euler("ZX", (180, 90), degrees=True)
-        current_angle_deg = 20
-        start_time = 0
-        end_time = step_time
-        for r in range(n):
-            r = 40 * cm
-            if i == 1:
-                r = -40 * cm
-            t, rot = gate.geometry.utility.get_transform_orbiting(
-                [r, 0, 0], "Z", current_angle_deg
-            )
-            rot = Rotation.from_matrix(rot)
-            rot = rot * initial_rot
-            rot = rot.as_matrix()
-            translations.append(t)
-            rotations.append(rot)
-            if i == 0:
-                sim.run_timing_intervals.append([start_time, end_time])
-            print(f'Add head {i}, angle {current_angle_deg} ({len(rotations)})')
-            current_angle_deg += step_angle
-            start_time = end_time
-            end_time += step_time
+    for r in range(n):
+        sim.run_timing_intervals.append([start_time, end_time])
+        start_time = end_time
+        end_time += step_time
 
-        # set the motion for the SPECT head
-        heads[i].add_dynamic_parametrisation(translation=translations, rotation=rotations)
+    # compute the gantry rotations
+    step_angle = 180 / n
+    initial_rot = Rotation.from_euler("X", 90, degrees=True)
+    rotate_gantry(heads[0], 40 * cm, initial_rot, 0, step_angle, n)
+
+    initial_rot = Rotation.from_euler("ZX", (180, 90), degrees=True)
+    rotate_gantry(heads[1], -40 * cm, initial_rot, 0, step_angle, n)
 
     # go !
-    sim.running_verbose_level = gate.logger.RUN
+    #sim.running_verbose_level = gate.logger.RUN
     sim.run()
+    print('done')
 
     # print
-    stats = sim.output.get_actor("stats")
     print(stats)
