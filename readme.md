@@ -5,18 +5,20 @@ One head SPECT, static, one single projection.
 No phantom, two spherical sources in air, mono energetic gammas, 
 with acceptance angle (gamma only emitted towards the SPECT head).
 
-About 5 sec computation time with 4 threads, PPS = 781,802
+About 5 sec computation time with 2 threads, PPS = 366,444
 
 
 # test002_iec_phantom
 
 Like test001 but with IEC phantom (6 spheres). 
 Gamma source with 177Lu energy spectra.
-About 5 sec computation time with 4 threads, PPS = 189,138
+
+About 30 sec computation time with 4 threads, PPS = 283,350
+
 
 # test003_iec_phantom_rotation
 
-Like test002 but 2 heads and with complete rotation : 60x2 projections. 
+Like test002 but 2 heads and with complete rotation : 60 (angles) x 2 (heads) projections. 
 Multithread work but not very efficient when the activity is low. 
 
 About 5 min computation time with 1 thread, PPS = 89,022
