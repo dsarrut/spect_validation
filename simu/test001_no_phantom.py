@@ -86,8 +86,6 @@ if __name__ == "__main__":
 
     # add stat actor
     stats = sim.add_actor("SimulationStatisticsActor", "stats")
-    stats.TOTO = "toto"
-    stats.mother = "toto"
     stats.track_types_flag = True
     stats.output_filename = f"{simu_name}_stats.txt"
 
