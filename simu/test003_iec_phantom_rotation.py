@@ -3,7 +3,7 @@
 
 from spect_helpers import *
 import opengate.contrib.phantoms.nemaiec as gate_iec
-import opengate.contrib.spect.ge_discovery_nm670 as nm670
+import opengate.contrib.spect.spect_helpers as spect_helpers
 from scipy.spatial.transform import Rotation
 from pathlib import Path
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     phantom = gate_iec.add_iec_phantom(sim, name='phantom')
 
     # table
-    table = nm670.add_fake_table(sim, "table")
+    table = spect_helpers.add_fake_table(sim, "table")
     table.translation = [0, 31 * cm, 0]
 
     # physics
@@ -96,6 +96,7 @@ if __name__ == "__main__":
         end_time += step_time
 
     # compute the gantry rotations
+    FIXME
     step_angle = 180 / n
     initial_rot = Rotation.from_euler("X", 90, degrees=True)
     rotate_gantry(heads[0], 40 * cm, initial_rot, 0, step_angle, n)

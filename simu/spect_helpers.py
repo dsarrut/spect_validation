@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from networkx.algorithms.bipartite.basic import color
 
 import opengate as gate
 from scipy.spatial.transform import Rotation
@@ -54,7 +55,9 @@ def add_digitizer_intevo_lu177(sim, name, crystal_name):
 
     # spatial blurring
     mm = gate.g4_units.mm
-    spatial_blur = sim.add_actor("DigitizerSpatialBlurringActor", f"singles_{name}_sblur")
+    spatial_blur = sim.add_actor(
+        "DigitizerSpatialBlurringActor", f"singles_{name}_sblur"
+    )
     spatial_blur.output_filename = ""
     spatial_blur.attached_to = crystal_name
     spatial_blur.input_digi_collection = ene_blur.name
@@ -63,7 +66,9 @@ def add_digitizer_intevo_lu177(sim, name, crystal_name):
     spatial_blur.keep_in_solid_limits = True
 
     # energy windows
-    singles_ene_windows = sim.add_actor("DigitizerEnergyWindowsActor", f"singles_{name}_ene_windows")
+    singles_ene_windows = sim.add_actor(
+        "DigitizerEnergyWindowsActor", f"singles_{name}_ene_windows"
+    )
     channels = [
         {"name": f"spectrum_{name}", "min": 3 * keV, "max": 515 * keV},
         {"name": f"scatter1_{name}", "min": 96 * keV, "max": 104 * keV},
@@ -114,12 +119,9 @@ def add_intevo_two_heads(sim, name, colli_type, radius):
     return heads, crystals
 
 
-def rotate_gantry(head,
-                  radius,
-                  initial_rotation,
-                  start_angle_deg,
-                  step_angle_deg,
-                  nb_angle):
+def rotate_gantry(
+    head, radius, initial_rotation, start_angle_deg, step_angle_deg, nb_angle
+):
     # compute the nb translation and rotation
     translations = []
     rotations = []
@@ -138,3 +140,80 @@ def rotate_gantry(head,
 
     # set the motion for the SPECT head
     head.add_dynamic_parametrisation(translation=translations, rotation=rotations)
+
+
+def create_wood_material(sim):
+    # https://geant4-forum.web.cern.ch/t/how-to-implement-specific-materials-like-pur-and-paper/9184
+    # C18 H13 N3 Na2O8 S2
+    elems = ["C", "H", "N", "Na", "S"]
+    nbAtoms = [18, 13, 2, 208, 2]
+    gcm3 = gate.g4_units.g_cm3
+    sim.volume_manager.material_database.add_material_nb_atoms(
+        "WoodFibers", elems, nbAtoms, 0.6 * gcm3
+    )
+
+
+def add_phantom_spatial_resolution(sim, name):
+    # def
+    mm = gate.g4_units.mm
+    red = [1, 0.7, 0.7, 0.8]
+    blue = [0.5, 0.5, 1, 0.8]
+    gray = [0.5, 0.5, 0.5, 1]
+
+    # source glass tube
+    glass_tube = sim.add_volume("Tubs", f"{name}")
+    glass_tube.rmin = 0 * mm
+    glass_tube.rmax = 0.75 * mm
+    glass_tube.dz = 70 * mm / 2.0
+    glass_tube.translation = [0, 0, 0]
+    # glass_tube.material = "G4_PLEXIGLASS"
+    glass_tube.material = "G4_Pyrex_Glass"
+    # glass_tube.material = "G4_GLASS_LEAD"
+    # glass_tube.material = "G4_GLASS_PLATE"
+    glass_tube.color = blue
+
+    # source container
+    container = sim.add_volume("Tubs", f"{name}_source_container")
+    container.mother = glass_tube
+    container.rmin = 0
+    container.rmax = 0.5 * mm
+    container.dz = 70 * mm / 2.0 - 1 * mm
+    container.material = "G4_AIR"
+    container.color = red
+
+    # support cardboard
+    create_wood_material(sim)
+    cardboard = sim.add_volume("Box", f"{name}_cardboard")
+    cardboard.size = [245 * mm, 75 * mm, 125 * mm]
+    cardboard.translation = [0, -cardboard.size[1] / 2 - glass_tube.rmax, 0]
+    cardboard.material = "WoodFibers"
+    cardboard.color = gray
+
+    # support polystyrene
+    polystyrene = sim.add_volume("Box", f"{name}_polystyrene")
+    polystyrene.size = [590 * mm, 50 * mm, 400 * mm]
+    polystyrene.translation = [
+        0,
+        cardboard.translation[1] - cardboard.size[1] / 2 - polystyrene.size[1] / 2,
+        polystyrene.size[2] / 2 - cardboard.size[2] / 2,
+    ]
+    polystyrene.material = "G4_POLYSTYRENE"
+    polystyrene.color = red
+
+    return container
+
+
+def add_source_spatial_resolution(sim, name, container, rad="lu177", aa_volumes=None):
+    source = sim.add_source("GenericSource", name)
+    source.mother = container.name
+    source.particle = "gamma"
+    source.position.type = "cylinder"
+    source.position.radius = container.rmax
+    source.position.dz = container.dz
+    source.direction.type = "iso"
+    gate.sources.generic.set_source_rad_energy_spectrum(source, rad)
+    if aa_volumes is not None:
+        source.direction.acceptance_angle.volumes = aa_volumes
+        source.direction.acceptance_angle.intersection_flag = True
+        source.direction.acceptance_angle.skip_policy = "SkipEvents"
+    return source
