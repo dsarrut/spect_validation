@@ -18,12 +18,13 @@ if __name__ == "__main__":
     # sim.visu = True
     sim.visu_type = "qt"
     sim.random_seed = "auto"
-    sim.number_of_threads = 4
+    sim.number_of_threads = 8
     sim.progress_bar = True
     sim.output_dir = Path("output") / simu_name
 
     # units
     sec = gate.g4_units.s
+    min = gate.g4_units.min
     deg = gate.g4_units.deg
     mm = gate.g4_units.mm
     cm = gate.g4_units.cm
@@ -34,8 +35,9 @@ if __name__ == "__main__":
     keV = gate.g4_units.keV
 
     # acquisition param
-    time = 30 * sec
-    activity = 5e6 * Bq / sim.number_of_threads
+    time = 5 * min
+    activity = 3e6 * Bq / sim.number_of_threads
+    activity = 1e6 * Bq / sim.number_of_threads
     if sim.visu:
         time = 1 * sec
         activity = 100 * Bq
@@ -48,17 +50,20 @@ if __name__ == "__main__":
 
     # spect head
     head, colli, crystal = nm670.add_spect_head(
-        sim, "spect", collimator_type="lehr", debug=sim.visu
+        sim, "spect", collimator_type="lehr", debug=sim.visu, crystal_size="5/8"
     )
     nm670.rotate_gantry(head, radius=10 * cm, start_angle_deg=0)
 
-    # phantom
+    # phantom + (fake) table
     table = add_fake_table(sim, "table")
     table.translation = [0, 20.5 * cm, 0]
-    phantom = add_phantom_spatial_resolution(sim, "phantom")
+    glass_tube = add_phantom_spatial_resolution(sim, "phantom")
+    glass_tube.rotation = Rotation.from_euler("Y", 3, degrees=True).as_matrix()
+    glass_tube.translation = [0, 0, -2 * mm]
 
-    # source
-    src = add_source_spatial_resolution(sim, "source", phantom, "tc99m", [head.name])
+    # source with AA to speedup
+    container = sim.volume_manager.get_volume(f"phantom_source_container")
+    src = add_source_spatial_resolution(sim, "source", container, "tc99m", [head.name])
     src.activity = activity
 
     # physics
@@ -68,18 +73,9 @@ if __name__ == "__main__":
     sim.physics_manager.set_production_cut(crystal.name, "all", 2 * mm)
 
     # digitizer : probably not correct
-    digit = nm670.add_digitizer_tc99m(sim, crystal.name, "digitizer")
-    ew = digit.find_module("energy_window")
-    ew.channels = [
-        {"name": f"scatter", "min": 114 * keV, "max": 126 * keV},
-        {"name": f"peak140", "min": 126.45 * keV, "max": 154.55 * keV},
-    ]
+    digit = add_digitizer_tc99m_wip(sim, crystal.name, "digitizer", False)
     proj = digit.find_module("projection")
     proj.output_filename = f"{simu_name}_projection.mhd"
-    proj.size = [512, 512]
-    proj.spacing = [1.1049 * mm, 1.1049 * mm]
-    proj.input_digi_collections = [c["name"] for c in ew.channels]
-    proj.write_to_disk = True
     print(f"Projection size: {proj.size}")
     print(f"Projection spacing: {proj.spacing} mm")
     print(f"Projection output: {proj.get_output_path()}")
