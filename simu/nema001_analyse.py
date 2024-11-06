@@ -53,11 +53,11 @@ if __name__ == "__main__":
     a = 256 - 60
     b = 256 + 60
     x = np.arange(start=a, stop=b) * s
-    w = 5
+    w = 2
     c = 256
-    y = np.sum(ref_img_array[a:b, c - w : c + w], axis=1)
+    y = np.sum(ref_img_array[c - w : c + w, a:b], axis=0)
     ax.plot(x, y, label="ref")
-    y = np.sum(img_array[a:b, c - w : c + w], axis=1)
+    y = np.sum(img_array[c - w : c + w, a:b], axis=0)
     ax.plot(x, y, label="simu")
 
     plt.legend()
