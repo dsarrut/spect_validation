@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from networkx.algorithms.bipartite.basic import color
 
 import opengate as gate
 from scipy.spatial.transform import Rotation
@@ -206,13 +205,13 @@ def add_phantom_spatial_resolution(sim, name):
 
 def add_source_spatial_resolution(sim, name, container, rad="lu177", aa_volumes=None):
     source = sim.add_source("GenericSource", name)
-    source.mother = container.name
+    source.attached_to = container.name
     source.particle = "gamma"
     source.position.type = "cylinder"
     source.position.radius = container.rmax
     source.position.dz = container.dz
     source.direction.type = "iso"
-    gate.sources.generic.set_source_rad_energy_spectrum(source, rad)
+    gate.sources.base.set_source_rad_energy_spectrum(source, rad)
     if aa_volumes is not None:
         source.direction.acceptance_angle.volumes = aa_volumes
         source.direction.acceptance_angle.intersection_flag = True
@@ -240,14 +239,14 @@ def add_digitizer_tc99m_wip(sim, crystal_name, name, spectrum_channel=True):
     eb = digitizer.add_module("DigitizerBlurringActor", f"{name}_blur")
     eb.blur_attribute = "TotalEnergyDeposit"
     eb.blur_method = "InverseSquare"
-    eb.blur_resolution = 0.063  # ???
+    eb.blur_resolution = 0.089  # ???
     eb.blur_reference_value = 140.57 * keV
 
     # spatial blurring
     sb = digitizer.add_module("DigitizerSpatialBlurringActor", f"{name}_sp_blur")
+    sb.attached_to = crystal_name
     sb.blur_attribute = "PostPosition"
     sb.blur_fwhm = 7.6 * mm  # ???
-    sb.blur_fwhm = 5.6 * mm  # ???
     sb.keep_in_solid_limits = True
 
     # energy windows (Energy range. 35-588 keV)
@@ -256,6 +255,58 @@ def add_digitizer_tc99m_wip(sim, crystal_name, name, spectrum_channel=True):
         {"name": f"spectrum", "min": 3 * keV, "max": 160 * keV},
         {"name": f"scatter", "min": 114 * keV, "max": 126 * keV},
         {"name": f"peak140", "min": 126.45 * keV, "max": 154.55 * keV},
+    ]
+    if not spectrum_channel:
+        channels.pop(0)
+    cc.channels = channels
+
+    # projection
+    proj = digitizer.add_module("DigitizerProjectionActor", f"{name}_projection")
+    channel_names = [c["name"] for c in channels]
+    proj.input_digi_collections = channel_names
+    proj.spacing = [1.1049 * mm, 1.1049 * mm]
+    proj.size = [512, 512]
+    proj.write_to_disk = True
+
+    # end
+    return digitizer
+
+
+def add_digitizer_iodine_wip(sim, crystal_name, name, spectrum_channel=True):
+    # create main chain
+    mm = gate.g4_units.mm
+    digitizer = Digitizer(sim, crystal_name, name)
+
+    # Singles
+    sc = digitizer.add_module("DigitizerAdderActor", f"{name}_singles")
+    sc.group_volume = None
+    sc.policy = "EnergyWinnerPosition"
+
+    # detection efficiency
+    # ea = digitizer.add_module("DigitizerEfficiencyActor", f"{name}_eff")
+    # ea.efficiency = 0.86481  # FAKE
+
+    # energy blurring
+    keV = gate.g4_units.keV
+    # (3/8” Crystal) = Intrinsic Energy Resolution (Tc-99m @ 20 kcps) UFOV FWHM ≤ 6.3%
+    eb = digitizer.add_module("DigitizerBlurringActor", f"{name}_blur")
+    eb.blur_attribute = "TotalEnergyDeposit"
+    eb.blur_method = "InverseSquare"
+    eb.blur_resolution = 0.089  # ???
+    eb.blur_reference_value = 140.57 * keV
+
+    # spatial blurring
+    sb = digitizer.add_module("DigitizerSpatialBlurringActor", f"{name}_sp_blur")
+    sb.blur_attribute = "PostPosition"
+    sb.blur_fwhm = 7.6 * mm  # ???
+    sb.keep_in_solid_limits = True
+
+    # energy windows (Energy range. 35-588 keV)
+    cc = digitizer.add_module("DigitizerEnergyWindowsActor", f"{name}_energy_window")
+    channels = [
+        {"name": f"spectrum", "min": 3 * keV, "max": 800 * keV},
+        {"name": f"scatter", "min": 232 * keV, "max": 291 * keV},
+        {"name": f"peak364", "min": 291 * keV, "max": 436 * keV},
     ]
     if not spectrum_channel:
         channels.pop(0)

@@ -4,6 +4,7 @@
 import opengate as gate
 import opengate.contrib.phantoms.nemaiec as gate_iec
 import opengate.contrib.spect.siemens_intevo as intevo
+from opengate.sources.base import set_source_rad_energy_spectrum
 from scipy.spatial.transform import Rotation
 from spect_helpers import add_digitizer_intevo_lu177
 from pathlib import Path
@@ -49,7 +50,7 @@ if __name__ == "__main__":
     head.rotation = Rotation.from_euler("zx", (90, 90), degrees=True).as_matrix()
 
     # phantom
-    phantom = gate_iec.add_iec_phantom(sim, name='phantom')
+    phantom = gate_iec.add_iec_phantom(sim, name="phantom")
 
     # physics
     sim.physics_manager.physics_list_name = "G4EmStandardPhysics_option3"
@@ -64,7 +65,7 @@ if __name__ == "__main__":
         sim, phantom.name, "sources", "all", activity_Bq_mL, verbose=True
     )
     for source in sources:
-        gate.sources.generic.set_source_rad_energy_spectrum(source, "lu177")
+        gate.sources.base.set_source_rad_energy_spectrum(source, "lu177")
         source.particle = "gamma"
         source.direction.acceptance_angle.volumes = [head.name]
         source.direction.acceptance_angle.intersection_flag = True
@@ -72,9 +73,9 @@ if __name__ == "__main__":
     # digitizer : probably not correct
     proj = add_digitizer_intevo_lu177(sim, head.name, crystal.name)
     proj.output_filename = f"{simu_name}_projection.mhd"
-    print(f'Projection size: {proj.size}')
-    print(f'Projection spacing: {proj.spacing} mm')
-    print(f'Projection output: {proj.get_output_path()}')
+    print(f"Projection size: {proj.size}")
+    print(f"Projection spacing: {proj.spacing} mm")
+    print(f"Projection output: {proj.get_output_path()}")
 
     # add stat actor
     stats = sim.add_actor("SimulationStatisticsActor", "stats")
